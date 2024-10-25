@@ -48,7 +48,7 @@ class Aircraft:
  
         self.fuel_level -= self.fuel_burn_linear * delta_time 
 
-        turning_rate_delta, vertical_speed_delta = self.autopilot.iterate(self.x, self.y, self.z, self.route, self.turning_rate, self.roc)
+        turning_rate_delta, vertical_speed_delta = self.autopilot.iterate(self.x, self.y, self.z, self.route, self.heading, self.turning_rate, self.roc)
         self.angular_speed += turning_rate_delta
         self.speed_z += vertical_speed_delta
 
