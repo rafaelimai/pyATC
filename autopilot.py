@@ -20,21 +20,28 @@ class Autopilot:
     #turning_rate_delta, vertical_speed_delta = self.autopilot.iterate(self.x, self.y, self.z, self.route, self.turning_rate, self.roc)
 
     def iterate(self, x, y, z, route, heading, turning_rate_limit, roc_limit):
+        if route is None:            
+            error_height = z-200 
+            
+            vertical_speed_delta = self.pid_heading.calculate_control_function(error_height)
+            
+            return 0, vertical_speed_delta
+        else:
+            distances = [math.sqrt((x - i[0])**2+(y - i[1])**2+(z - i[2])**2) for i in route]
+            waypoint_index = distances.index(min(distances))
 
-        distances = [math.sqrt((x - i[0])^2+(y - i[1])^2+(z - i[2])^2) for i in route]
-        waypoint_index = distances.index(min(distances))
+            # closest waypoint
+            x_waypoint = route[waypoint_index][0]
+            y_waypoint = route[waypoint_index][1]
+                
+            z_waypoint = route[waypoint_index][2]
+            error_height = z - z_waypoint
 
-        # closest waypoint
-        x_waypoint = route[waypoint_index][0]
-        y_waypoint = route[waypoint_index][1]
-        z_waypoint = route[waypoint_index][2]
+            desired_heading = math.atan((x-x_waypoint)/(y-y_waypoint))    
+            error_heading = heading - desired_heading
+            turning_rate_delta = self.pid_heading.calculate_control_function(error_heading)
 
-        desired_heading = math.atan((x-x_waypoint)/(y-y_waypoint))
-        error_heading = heading - desired_heading
-        error_height = z - z_waypoint
-
-        turning_rate_delta = self.pid_heading.calculate_control_function(error_heading)
-        vertical_speed_delta = self.pid_heading.calculate_control_function(error_height)
-        
-        return turning_rate_delta, vertical_speed_delta
+            vertical_speed_delta = self.pid_heading.calculate_control_function(error_height)
+            
+            return turning_rate_delta, vertical_speed_delta
         
