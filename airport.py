@@ -1,60 +1,72 @@
+"""Minimal airport capacity and runway geometry model."""
+
 import math
 
-# A 1000m runway is pretty much enough for general aviation aircraft. 
-DEFAULT_RUNWAY_LENGTH = 1000
+DEFAULT_RUNWAY_LENGTH = 1000.0
 
-# If an aircraft's distance (considering x, y and z) is less than 20 meters, let's say it was a landing.
-SUCCESSFUL_LANDING_BOUNDARY = 20
+
+class AirportCapacityError(RuntimeError):
+    """Raised when an aircraft cannot land because the airport is full."""
+
+
+class AircraftNotGroundedError(ValueError):
+    """Raised when takeoff is requested for an aircraft not at the airport."""
+
 
 class Airport:
-    """ 
-    Although airports are not technically on the airspace, I'll place them inside the class for the sake of simplicity.
+    """A sea-level runway whose angle is 0 north and increases clockwise."""
 
-    runway_x/runway_y = (x,y) coordinates of the runway
-    runway_angle = angle in respect to the x-axis. A runway parallel to the x-axis would have a runway_angle of 0. Angles in radians.
-
-    Let's simplify the airport as if it was on the sea level (quasi-Netherlands hypothesis)
-    """
-    grounded_aircraft = []
-
-    # By default, aircraft will take off facing the upper point of the runway.
-    takeoff_on_upper = True
-
-    def __init__(self, aircraft_limit, runway_x, runway_y, runway_angle):
+    def __init__(
+        self,
+        aircraft_limit: int,
+        runway_x: float,
+        runway_y: float,
+        runway_angle: float,
+        runway_length: float = DEFAULT_RUNWAY_LENGTH,
+    ) -> None:
+        if aircraft_limit < 0:
+            raise ValueError("aircraft_limit cannot be negative")
+        if runway_length <= 0:
+            raise ValueError("runway_length must be greater than zero")
         self.aircraft_limit = aircraft_limit
         self.runway_x = runway_x
         self.runway_y = runway_y
         self.runway_angle = runway_angle
-        self.runway_upper_x = runway_x + DEFAULT_RUNWAY_LENGTH/2 * math.sin(runway_angle)
-        self.runway_upper_y = runway_y + DEFAULT_RUNWAY_LENGTH/2 * math.cos(runway_angle)
-        self.runway_lower_x = runway_x - DEFAULT_RUNWAY_LENGTH/2 * math.sin(runway_angle)
-        self.runway_lower_y = runway_y - DEFAULT_RUNWAY_LENGTH/2 * math.cos(runway_angle)
-        self.complimentary_rwy_angle = runway_angle + math.pi
-    
-    def land_aircraft(self, aircraft):        
+        self.runway_length = runway_length
+        self.grounded_aircraft: list[object] = []
+        self.takeoff_on_upper = True
+        half_length = runway_length / 2
+        dx = half_length * math.sin(runway_angle)
+        dy = half_length * math.cos(runway_angle)
+        self.runway_upper_x = runway_x + dx
+        self.runway_upper_y = runway_y + dy
+        self.runway_lower_x = runway_x - dx
+        self.runway_lower_y = runway_y - dy
+
+    @property
+    def touchdown_point(self) -> tuple[float, float, float]:
+        if self.takeoff_on_upper:
+            return self.runway_lower_x, self.runway_lower_y, 0.0
+        return self.runway_upper_x, self.runway_upper_y, 0.0
+
+    def land_aircraft(self, aircraft: object) -> bool:
+        if aircraft in self.grounded_aircraft:
+            return False
+        if len(self.grounded_aircraft) >= self.aircraft_limit:
+            raise AirportCapacityError("airport has reached its aircraft capacity")
         self.grounded_aircraft.append(aircraft)
+        return True
 
-    def takeoff_aircraft(self, aircraft):
+    def takeoff_aircraft(self, aircraft: object) -> bool:
+        if aircraft not in self.grounded_aircraft:
+            raise AircraftNotGroundedError("aircraft is not grounded at this airport")
         if self.takeoff_on_upper:
-            aircraft.x = self.runway_upper_x
-            aircraft.y = self.runway_upper_y
+            aircraft.x, aircraft.y = self.runway_upper_x, self.runway_upper_y
         else:
-            aircraft.x = self.runway_lower_x
-            aircraft.y = self.runway_lower_y
-
+            aircraft.x, aircraft.y = self.runway_lower_x, self.runway_lower_y
         self.grounded_aircraft.remove(aircraft)
+        return True
 
-    def distance_to_touchdown(self, aircraft):
-        #Takeoff on upper, landing on lower
-        if self.takeoff_on_upper:
-            touchdown_x = self.runway_lower_x
-            touchdown_y = self.runway_lower_y
-        else:
-            touchdown_x = self.runway_upper_x
-            touchdown_y = self.runway_lower_y
-        
-        touchdown_z = 0 #Quasi-Netherlands hypothesis - Maybe something more on the future?
-    
-        distance = math.sqrt((aircraft.x - touchdown_x)^2 + (aircraft.y - touchdown_y)^2 + (aircraft.z - touchdown_z)^2)
-
-        return distance
+    def distance_to_touchdown(self, aircraft: object) -> float:
+        """Return 3-D distance in metres to the active touchdown endpoint."""
+        return math.dist((aircraft.x, aircraft.y, aircraft.z), self.touchdown_point)

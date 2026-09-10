@@ -1,23 +1,43 @@
-# Simple PID implementation
+"""Small, stateful discrete PID controller."""
+
+from dataclasses import dataclass
 
 
-#https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller
+@dataclass(frozen=True)
+class PIDGains:
+    """Explicit proportional, integral, and derivative gains."""
+
+    kp: float
+    ki: float
+    kd: float
+
 
 class PID:
+    """A PID using the error convention ``target - actual``."""
 
-    previous_error = 0
-    integral_error = 0
-    time_delta = 0
+    def __init__(self, kp: float, ki: float, kd: float) -> None:
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.reset()
 
-    def __init__(self, Kp, Ki, Kd, time_delta):
-        self.Kp = Kp
-        self.Ki = Ki
-        self.Kd = Kd
-        self.time_delta = time_delta
-        pass
+    def reset(self) -> None:
+        """Clear accumulated integral and derivative history."""
+        self.integral_error = 0.0
+        self.previous_error: float | None = None
 
-    def calculate_control_function(self, error_value):
-        control_result = self.Kp * error_value
-        control_result += self.Ki * (error_value - self.previous_error) * self.time_delta
-        control_result += self.Kd * (error_value - self.previous_error) / self.time_delta
-        return control_result
+    def calculate_control_function(self, error_value: float, dt: float) -> float:
+        """Return the control output for *error_value* over *dt* seconds."""
+        if dt <= 0:
+            raise ValueError("dt must be greater than zero")
+        self.integral_error += error_value * dt
+        derivative_error = 0.0
+        if self.previous_error is not None:
+            derivative_error = (error_value - self.previous_error) / dt
+        result = (
+            self.kp * error_value
+            + self.ki * self.integral_error
+            + self.kd * derivative_error
+        )
+        self.previous_error = error_value
+        return result
